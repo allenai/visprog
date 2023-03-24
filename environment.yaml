@@ -1,7 +1,6 @@
 name: visprog
 dependencies:
   - python=3.10
-  - ipykernel=6.15.2
   - pip
   - pip:
     - openai==0.23.0
@@ -15,3 +14,4 @@ dependencies:
     - augly==1.0.0
     - diffusers==0.14.0
     - accelerate==0.17.1
+    - ipykernel==6.15.2
