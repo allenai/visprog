@@ -61,8 +61,49 @@ FINAL_RESULT=RESULT(var=ANSWER2)
 ### Visual Rationale
 ![assets/rationale.png](assets/rationale.png)
 
+# What if VisProg doesn't solve your task?
+It is possible that the instruction you provide is not solved correctly by VisProg. This can happen for a few reasons:
+1. The instruction is very different from in-context examples that VisProg has seen before. In this case, even though the current set of modules may be adequate for solving the task, VisProg failed because of incorrect program generation. In this case, see if you can write a program using VisProg's modules that solves the task. If you can, then you may add this program to the in-context examples and re-run the notebook to handle similar instructions.
+2. The problem is not solvable with the current set of modules in VisProg. If this is the case, you can add new modules to VisProg to solve this task. See the next section for details.
+
 # Adding new functionality and ability to solve new tasks
-- Add new modules for enabling these functionalities to [`engine/step_interpreters.py`](engine/step_interpreters.py). Don't forget to register these modules in `register_step_interpreters` function in the same file. 
+- Add new modules for enabling these functionalities to [`engine/step_interpreters.py`](engine/step_interpreters.py). Don't forget to register these modules in `register_step_interpreters` function in the same file. Here's the step interpreter for the COUNT module. All modules have a similar structure with a `parse`, `html`, and `execute` function. The `parse` function parses the program string to extract the arguments and output variable. The `html` function generates the html representation for the execution trace. The `execute` function executes the module and returns the output and the html (if `inspect=True`) for the execution trace.
+
+    ```python
+    class CountInterpreter():
+        step_name = 'COUNT'
+
+        def __init__(self):
+            print(f'Registering {self.step_name} step')
+
+        def parse(self,prog_step):
+            parse_result = parse_step(prog_step.prog_str)
+            step_name = parse_result['step_name']
+            box_var = parse_result['args']['box']
+            output_var = parse_result['output_var']
+            assert(step_name==self.step_name)
+            return box_var,output_var
+
+        def html(self,box_img,output_var,count):
+            step_name = html_step_name(self.step_name)
+            output_var = html_var_name(output_var)
+            box_arg = html_arg_name('bbox')
+            box_img = html_embed_image(box_img)
+            output = html_output(count)
+            return f"""<div>{output_var}={step_name}({box_arg}={box_img})={output}</div>"""
+
+        def execute(self,prog_step,inspect=False):
+            box_var,output_var = self.parse(prog_step)
+            boxes = prog_step.state[box_var]
+            count = len(boxes)
+            prog_step.state[output_var] = count
+            if inspect:
+                box_img = prog_step.state[box_var+'_IMAGE']
+                html_str = self.html(box_img, output_var, count)
+                return count, html_str
+
+            return count
+    ```
 - Add your in-context examples to a new file `prompts/your_task_or_dataset_name.py`. Note that instead of using in-context examples to generate programs, you may experiment with different ways of prompting such as providing function signatures and docstrings without needing to change the code at all!
 - You can now play with examples from this dataset using a notebook similar to those in the `notebooks/` folder or create a python script to run inference on a large number of examples.
 
