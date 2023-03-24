@@ -32,7 +32,6 @@ def mask_image(img,mask):
     return Image.fromarray(img)
 
 def image_grid(imgs,rows,cols):
-    # import ipdb; ipdb.set_trace()
     w, h = imgs[0].size
     grid = Image.new('RGB', size=(cols*w, rows*h))
     grid_w, grid_h = grid.size
@@ -59,9 +58,6 @@ def vis_masks(img,objs,labels=None):
             canvas = ImageDraw.Draw(img)
             canvas.text((0,0),label,fill='white',font=font)
 
-    # if len(imgs) <= 3:
-    #     cols = len(imgs)
-    # else:
     cols=math.ceil(math.sqrt(len(imgs)))
     cols=min(3,len(imgs))
     rows=math.ceil(len(imgs)/3)
