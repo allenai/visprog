@@ -37,7 +37,7 @@ The basic structure of the notebooks is as follows:
 - Import `ProgramGenerator` and `ProgramInterpreter` classes
 - Import `PROMPT` (a text string containing in-context examples) or `create_prompt` (a function that creates the prompt on the fly)
 - Create the `ProgramGenerator` and `ProgramInterpreter` objects
-- Load the image or images to perform inference one
+- Load the image or images to perform inference on
 - Specify the natural language question / statement / instruction
 - Generate program from the specified instruction using `ProgramGenerator`
 - Interpret and execute program using `ProgramInterpreter`
