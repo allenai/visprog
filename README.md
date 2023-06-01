@@ -1,7 +1,7 @@
 # Visual Programming: Compositional visual reasoning without training (CVPR 2023)
 By [Tanmay Gupta](http://tanmaygupta.info/) and  [Aniruddha Kembhavi](https://anikem.github.io/)
 
-[ [Project Page](https://tanmaygupta.info/visprog/) | [Arxiv Paper](https://arxiv.org/abs/2211.11559) | [Blog](https://blog.allenai.org/visual-programming-ca58c7af51cd) ]
+[ [Project Page](https://prior.allenai.org/projects/visprog) | [Arxiv Paper](https://arxiv.org/abs/2211.11559) | [Blog](https://blog.allenai.org/visual-programming-ca58c7af51cd) ]
 
 ![teaser](assets/teaser2.png)
 
