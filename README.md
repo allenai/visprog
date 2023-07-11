@@ -1,4 +1,4 @@
-# Visual Programming: Compositional visual reasoning without training (CVPR 2023)
+# Visual Programming: Compositional visual reasoning without training (CVPR 2023 Best Paper!)
 By [Tanmay Gupta](http://tanmaygupta.info/) and  [Aniruddha Kembhavi](https://anikem.github.io/)
 
 [ [Project Page](https://prior.allenai.org/projects/visprog) | [Arxiv Paper](https://arxiv.org/abs/2211.11559) | [Blog](https://blog.allenai.org/visual-programming-ca58c7af51cd) ]
