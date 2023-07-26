@@ -118,7 +118,6 @@ It is possible that the instruction you provide is not solved correctly by VisPr
 # Changes since the version used in the CVPR paper
 - GPT3 upgraded to `text-davinci-003` from `text-davinci-002`
 - VQA module upgraded from ViLT to the more performant BLIP
-- Changed the implementation of CLASSIFY and SELECT modules that use CLIP to use cosine similarity instead of dot product (which is the default score provided by Huggingface's CLIP model)
 
 # Citation
 If you find this code useful in your research, please consider citing:
