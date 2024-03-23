@@ -53,7 +53,7 @@ def vis_masks(img,objs,labels=None):
         imgs.append(obj_img)
 
     if labels is not None:
-        font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf', 60)
+        font = ImageFont.truetype('arial.ttf', 60)
         for img,label in zip(imgs,labels):
             canvas = ImageDraw.Draw(img)
             canvas.text((0,0),label,fill='white',font=font)
