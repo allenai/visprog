@@ -72,7 +72,7 @@ class ProgramGenerator():
 
     def generate(self,inputs):
         response = openai.Completion.create(
-            model="text-davinci-003",
+            model="gpt-3.5-turbo-instruct",
             prompt=self.prompter(inputs),
             temperature=self.temperature,
             max_tokens=512,
