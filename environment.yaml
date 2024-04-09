@@ -15,3 +15,4 @@ dependencies:
     - diffusers==0.14.0
     - accelerate==0.17.1
     - ipykernel==6.15.2
+    - chardet==5.2.0
