@@ -49,6 +49,8 @@ class ProgramInterpreter:
 class ProgramGenerator():
     def __init__(self,prompter,temperature=0.7,top_p=0.5,prob_agg='mean'):
         openai.api_key = os.getenv("OPENAI_API_KEY")
+        print("hello")
+        print(os.getenv("OPENAI_API_KEY"))
         self.prompter = prompter
         self.temperature = temperature
         self.top_p = top_p
@@ -56,7 +58,7 @@ class ProgramGenerator():
 
     def compute_prob(self,response):
         eos = '<|endoftext|>'
-        for i,token in enumerate(response.choices[0]['logprobs']['tokens']):
+        for i,token in enumerate(response.choices[0].logprobs):
             if token==eos:
                 break
 
@@ -68,22 +70,24 @@ class ProgramGenerator():
             raise NotImplementedError
 
         return np.exp(agg_fn(
-            response.choices[0]['logprobs']['token_logprobs'][:i]))
+            response.choices[0].logprobs.token_logprobs[:i]))
 
     def generate(self,inputs):
-        response = openai.Completion.create(
-            model="text-davinci-003",
-            prompt=self.prompter(inputs),
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=self.prompter(inputs),
             temperature=self.temperature,
             max_tokens=512,
             top_p=self.top_p,
             frequency_penalty=0,
             presence_penalty=0,
             n=1,
-            logprobs=1
+            logprobs=True
         )
 
-        prob = self.compute_prob(response)
-        prog = response.choices[0]['text'].lstrip('\n').rstrip('\n')
-        return prog, prob
+        # print(response.choices[0].logprobs)
+
+        # prob = self.compute_prob(response)
+        prog = response.choices[0].message.content
+        return prog
     
