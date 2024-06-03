@@ -1,7 +1,7 @@
 import cv2
 import os
 import torch
-import openai
+from openai import OpenAI
 import functools
 import numpy as np
 import face_detection
@@ -11,9 +11,12 @@ import augly.image as imaugs
 from PIL import Image,ImageDraw,ImageFont,ImageFilter
 from transformers import (ViltProcessor, ViltForQuestionAnswering, 
     OwlViTProcessor, OwlViTForObjectDetection,
+    AutoModelForZeroShotObjectDetection, DetrImageProcessor, DetrForObjectDetection,
     MaskFormerFeatureExtractor, MaskFormerForInstanceSegmentation,
     CLIPProcessor, CLIPModel, AutoProcessor, BlipForQuestionAnswering)
 from diffusers import StableDiffusionInpaintPipeline
+from .object_graph import ObjectGraph, ObjectGraphGroup
+import re
 
 from .nms import nms
 from vis_utils import html_embed_image, html_colored_span, vis_masks
@@ -191,18 +194,226 @@ class VQAInterpreter():
 
         return answer
 
+class BuildInterpreter():
+    step_name = "BUILD"
+    
+    def __init__(self):
+        self.vqa = VQAInterpreter()
+        
+        self.crop = CropInterpreter()
 
+    def parse(self,prog_step):
+        parse_result = parse_step(prog_step.prog_str)
+        step_name = parse_result['step_name']
+        objs_var = parse_result['args']['objects']
+        output_var = parse_result['output_var']
+        assert(step_name==self.step_name)
+        return objs_var,output_var
+    
+    def execute(self, prog_step,inspect=False):
+        objs_var, output_var = self.parse(prog_step)
+
+        objs = prog_step.state[objs_var]
+        img = objs["img"]
+        category = objs["category"]
+
+        graphs = ObjectGraphGroup(img)
+
+        for obj in objs["box"]:
+            croped_img = self.crop.cropbox(obj, img)
+            
+            answer = self.vqa.predict(croped_img, f"What's this {category}?")
+            
+            mid_w, mid_h = (obj[0] + obj[2]) / 2, (obj[1] + obj[3]) / 2
+            w, h = img.size
+            location = (mid_w / w, mid_h / h)
+            size = (obj[2] - obj[0]), obj[3] - obj[1]
+
+            graphs.add_graph(ObjectGraph(answer, obj, category, location, size))
+
+        print(graphs.Graphs)
+        prog_step.state[output_var] = graphs
+
+class ADDInterpreter():
+    step_name = 'ADD'
+
+    def __init__(self):
+        self.vqa = VQAInterpreter()
+
+    def parse(self,prog_step):
+        parse_result = parse_step(prog_step.prog_str)
+        step_name = parse_result['step_name']
+        graph_var = parse_result['args']['graph']
+        attribute_str = parse_result['args']['attribute']
+        output_var = parse_result['output_var']
+        assert(step_name==self.step_name)
+        return graph_var,attribute_str,output_var
+    
+    def execute(self, prog_step,inspect=False):
+        graph_var, attribute_str, output_var = self.parse(prog_step)
+
+        graph = prog_step.state[graph_var]
+        img = graph.Img
+
+        res_graph = ObjectGraphGroup(img=img)
+
+        for obj in graph.Graphs:
+            if attribute_str in obj.Attribute:
+                pass
+            else:
+                cropped_img = img.crop(obj.Attribute["Box"])
+                obj_name = obj.Attribute["Name"]
+                answer = self.vqa.predict(cropped_img, f"What's the {attribute_str} of this {obj_name}?")
+
+                obj.add(attribute_str, answer)
+            
+            res_graph.add_graph(obj)
+
+        prog_step.state[output_var] = res_graph
+        
+        return res_graph
+
+class MERGEInterpreter():
+    step_name = 'MERGE'
+
+    RELATION_MESSAGE = [
+    {
+    "role": "system",
+    "content": """Given the relationship (subject, object): relationship, generate a question that asks about this relationship.
+
+For example:
+**Input**: (bottles, wine): right_of 
+**Output**: "Is the bottles to the right of the wine?"
+
+
+3.  should be converted to "Is the book under the table?"
+
+Please follow this format to create the questions.
+"""
+    },
+    {
+    "role": "user",
+    "content": """**Input:** (people, umbrella): carry"""
+    },
+    {
+    "role": "assistant",
+    "content": """**Output:** "Is the people carrying the umbrella?" """
+    },
+    {
+    "role": "user",
+    "content": """**Input:** (book, table): under"""
+    },
+    {
+    "role": "assistant",
+    "content": """**Output:** "Is the book under the table?" """
+    }
+    ]
+
+    def __init__(self):
+        self.vqa = VQAInterpreter()
+        self.client = OpenAI()
+
+    def parse(self,prog_step):
+        parse_result = parse_step(prog_step.prog_str)
+        step_name = parse_result['step_name']
+        graph1_var = parse_result['args']['graphA']
+        graph2_var = parse_result['args']['graphB']
+        relation_str = parse_result['args']['relation']
+        output_var = parse_result['output_var']
+        assert(step_name==self.step_name)
+        return graph1_var,graph2_var,relation_str,output_var
+    
+    def llm_ask(self, relation):
+        message = self.RELATION_MESSAGE
+        message.append({"role": "user", "content": f"**Input:** {relation}"})
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o",
+            temperature=0.8,
+            messages=message
+        )
+
+        answer = response.choices[0].message.content
+
+        matches = re.findall(r'"([^}]*)"', answer)
+
+        if len(matches) > 0:
+            return matches[0]
+
+        return ""
+    
+    def get_categories(self, group):
+        categories = []
+
+        for graph in group.Graphs:
+            if graph.Attribute["Category"] not in categories:
+                categories.append(graph.Attribute["Category"])
+
+        return categories
+
+    def focus_image(self, img, box1, box2):
+        black_image = Image.new('RGB', img.size, (0, 0, 0))
+
+        region1 = img.crop(box1)
+        black_image.paste(region1, (box1[0], box1[1]))
+
+        region2 = img.crop(box2)
+        black_image.paste(region2, (box2[0], box2[1]))
+
+        return black_image
+
+    def execute(self, prog_step,inspect=False):
+        graph1_var, graph2_var, relation_str, output_var = self.parse(prog_step)
+
+        graph1 = prog_step.state[graph1_var]
+        graph2 = prog_step.state[graph2_var]
+
+        if(relation_str == "None"):
+
+            merged_graph = ObjectGraphGroup(groupA=graph1, groupB=graph2)
+        
+        else:
+            merged_graph = ObjectGraphGroup(groupA=graph1, groupB=graph2)
+            img = merged_graph.Img
+
+            for objA in graph1.Graphs:
+                for objB in graph2.Graphs:
+                    new_img = self.focus_image(img, objA.Attribute["Box"], objB.Attribute["Box"])
+                    new_img.save("test.jpg")
+
+                    Aname = objA.Attribute["Name"]
+                    Bname = objB.Attribute["Name"]
+
+                    question = self.llm_ask(f"({Aname}, {Bname}): {relation_str}")
+                    print(question)
+
+                    answer = self.vqa.predict(new_img, question)
+
+                    if(answer == "yes"):
+                        merged_graph.add_relation(objA, objB, relation_str)
+            
+        prog_step.state[output_var] = merged_graph
+
+        return merged_graph
 class LocInterpreter():
     step_name = 'LOC'
 
-    def __init__(self,thresh=0.1,nms_thresh=0.5):
+    def __init__(self, thresh=0.1,nms_thresh=0.5):
         print(f'Registering {self.step_name} step')
-        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        self.processor = OwlViTProcessor.from_pretrained(
-            "google/owlvit-large-patch14")
-        self.model = OwlViTForObjectDetection.from_pretrained(
-            "google/owlvit-large-patch14").to(self.device)
-        self.model.eval()
+
+        model_id = "IDEA-Research/grounding-dino-base"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        self.processor = AutoProcessor.from_pretrained(model_id)
+        self.model = AutoModelForZeroShotObjectDetection.from_pretrained(
+            model_id).to(self.device)
+        
+        special_model_id = "facebook/detr-resnet-50"
+        self.special_processor = DetrImageProcessor.from_pretrained(
+            special_model_id, revision="no_timm")
+        self.special_model = DetrForObjectDetection.from_pretrained(
+            special_model_id, revision="no_timm")
+
         self.thresh = thresh
         self.nms_thresh = nms_thresh
 
@@ -225,22 +436,55 @@ class LocInterpreter():
         return [x1,y1,x2,y2]
 
     def predict(self,img,obj_name):
-        encoding = self.processor(
-            text=[[f'a photo of {obj_name}']], 
-            images=img,
-            return_tensors='pt')
-        encoding = {k:v.to(self.device) for k,v in encoding.items()}
+        prompt = f"a {obj_name}."
+
+        inputs = self.processor(
+            images=img, text=prompt, return_tensors="pt").to(self.device)
+
         with torch.no_grad():
-            outputs = self.model(**encoding)
-            for k,v in outputs.items():
-                if v is not None:
-                    outputs[k] = v.to('cpu') if isinstance(v, torch.Tensor) else v
+            outputs = self.model(**inputs)
+
+        results = self.processor.post_process_grounded_object_detection(
+            outputs,
+            inputs.input_ids,
+            box_threshold=0.4,
+            text_threshold=0.3,
+            target_sizes=[img.size[::-1]]
+        )
         
-        target_sizes = torch.Tensor([img.size[::-1]])
-        results = self.processor.post_process_object_detection(outputs=outputs,threshold=self.thresh,target_sizes=target_sizes)
         boxes, scores = results[0]["boxes"], results[0]["scores"]
         boxes = boxes.cpu().detach().numpy().tolist()
         scores = scores.cpu().detach().numpy().tolist()
+        if len(boxes)==0:
+            return []
+
+        boxes, scores = zip(*sorted(zip(boxes,scores),key=lambda x: x[1],reverse=True))
+        selected_boxes = []
+        selected_scores = []
+        for i in range(len(scores)):
+            if scores[i] > self.thresh:
+                coord = self.normalize_coord(boxes[i],img.size)
+                selected_boxes.append(coord)
+                selected_scores.append(scores[i])
+
+        selected_boxes, selected_scores = nms(
+            selected_boxes,selected_scores,self.nms_thresh)
+        return selected_boxes
+    
+    def special_predict(self, img):
+        inputs = self.special_processor(
+            images=img, return_tensors="pt").to(self.device)
+
+        with torch.no_grad():
+            outputs = self.special_model(**inputs)
+
+        target_sizes = torch.tensor([img.size[::-1]])
+        results = self.special_processor.post_process_object_detection(
+            outputs, target_sizes=target_sizes, threshold=0.9)[0]
+        
+        boxes, scores = results["boxes"], results["scores"]
+        boxes = boxes.tolist()
+        scores = scores.tolist()
         if len(boxes)==0:
             return []
 
@@ -307,17 +551,26 @@ class LocInterpreter():
             bboxes = [self.left_box(img)]
         elif obj_name=='RIGHT':
             bboxes = [self.right_box(img)]
+        elif obj_name=='object':
+            bboxes = self.special_predict(img)
         else:
             bboxes = self.predict(img,obj_name)
 
         box_img = self.box_image(img, bboxes)
-        prog_step.state[output_var] = bboxes
+
+        objs = dict(
+            box = bboxes,
+            category = obj_name,
+            img = img
+        )
+
+        prog_step.state[output_var] = objs
         prog_step.state[output_var+'_IMAGE'] = box_img
         if inspect:
             html_str = self.html(img, box_img, output_var, obj_name)
-            return bboxes, html_str
+            return objs, html_str
 
-        return bboxes
+        return objs
 
 
 class Loc2Interpreter(LocInterpreter):
@@ -414,6 +667,12 @@ class CropInterpreter():
         step_name = html_step_name(self.step_name)
         box_arg = html_arg_name('bbox')
         return f"""<div>{output_var}={step_name}({box_arg}={box_img})={out_img}</div>"""
+    
+    def cropbox(self, box, img):
+        box = self.expand_box(box, img.size)
+        out_img = img.crop(box)
+
+        return out_img
 
     def execute(self,prog_step,inspect=False):
         img_var,box_var,output_var = self.parse(prog_step)
@@ -1028,7 +1287,7 @@ List:"""
 
     def __init__(self):
         print(f'Registering {self.step_name} step')
-        openai.api_key = os.getenv("OPENAI_API_KEY")
+        self.client = OpenAI()
 
     def parse(self,prog_step):
         parse_result = parse_step(prog_step.prog_str)
@@ -1040,7 +1299,7 @@ List:"""
         return text,list_max,output_var
 
     def get_list(self,text,list_max):
-        response = openai.Completion.create(
+        response = self.client.Completion.create(
             model="text-davinci-002",
             prompt=self.prompt_template.format(list_max=list_max,text=text),
             temperature=0.7,
@@ -1377,4 +1636,12 @@ def register_step_interpreters(dataset='nlvr'):
             RESULT=ResultInterpreter(),
             TAG=TagInterpreter(),
             LOC=Loc2Interpreter(thresh=0.05,nms_thresh=0.3)
+        )
+    elif dataset=='graph':
+        return dict(
+            LOC=LocInterpreter(),
+            BUILD=BuildInterpreter(),
+            ADD=ADDInterpreter(),
+            MERGE=MERGEInterpreter(),
+            RESULT=ResultInterpreter()
         )
