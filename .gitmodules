@@ -1,0 +1,3 @@
+[submodule "GLIP"]
+	path = GLIP
+	url = https://github.com/Junital/GLIP.git
