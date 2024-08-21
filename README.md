@@ -1,4 +1,4 @@
-🔥 Checkout our new work [CodeNav](https://github.com/allenai/codenav) which addresses many of the limitation of VisProg and generalizes it further: 🔥 <br>
+🔥 Checkout our new work [CodeNav](https://github.com/allenai/codenav) which addresses many limitation of VisProg and generalizes it further: 🔥 <br>
 
 ✅ ~~Write tool descriptions~~ Point to the codebase which you want the CodeNav agent to use - that's right the raw source code - CodeNav will index and search the source code directly <br>
 ✅ ~~Generate the whole program at once~~ CodeNav iteratively generates code (which imports and invokes functions and classes from your codebase), executes it, and then decides the next step based on the execution output. The next step could be searching in the codebase or writing more code <br>
