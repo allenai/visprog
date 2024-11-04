@@ -19,7 +19,7 @@ OBJ0=FACEDET(image=IMAGE)
 OBJ1=SELECT(image=IMAGE,object=OBJ0,query='Nicole Kidman',category=None)
 IMAGE0=EMOJI(image=IMAGE,object=OBJ1,emoji='winking_face')
 OBJ2=SELECT(image=IMAGE,object=OBJ0,query='Brad Pitt',category=None)
-IMAGE1=EMOJI(image=IMAGE0,object=OBJ1,emoji='smiling_face_with_sunglasses')
+IMAGE1=EMOJI(image=IMAGE0,object=OBJ2,emoji='smiling_face_with_sunglasses')
 FINAL_RESULT=RESULT(var=IMAGE1)
 
 Instruction: Create a color pop of Amy and Daphne
@@ -78,7 +78,7 @@ Instruction: Replace the red bus (bus) with a truck
 Program:
 OBJ0=SEG(image=IMAGE)
 OBJ1=SELECT(image=IMAGE,object=OBJ0,query='red bus',category='bus')
-IMAGE0=REPLACE(image=IMAGE,object=OBJ1,prompt='blue bus')
+IMAGE0=REPLACE(image=IMAGE,object=OBJ1,prompt='truck')
 FINAL_RESULT=RESULT(var=IMAGE0)
 
 Instruction: {instruction}
